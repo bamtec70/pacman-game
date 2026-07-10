@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#000000" />
   <title>PAC-MAN — 1980 Arcade Classic</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -31,11 +34,11 @@
       <div id="overlay">
         <div id="overlay-title">PAC-MAN</div>
         <div id="overlay-sub">INSERT COIN</div>
-        <div id="overlay-hint">PRESS SPACE OR CLICK TO START</div>
+        <div id="overlay-hint">PRESS SPACE OR TAP TO START</div>
         <div id="overlay-controls">
-          ARROWS / WASD — MOVE<br />
-          SPACE — START / PAUSE<br />
-          M — MUTE
+          ARROWS / WASD / SWIPE / D-PAD — MOVE<br />
+          SPACE OR PAUSE — START / PAUSE<br />
+          M OR MUTE — SOUND
         </div>
       </div>
     </div>
@@ -44,6 +47,21 @@
       <div id="lives"></div>
       <div id="fruit-tray"></div>
     </footer>
+
+    <!-- On-screen controls for phones / touch screens -->
+    <div id="mobile-controls" aria-label="Touch controls">
+      <div class="mobile-side">
+        <button type="button" id="btn-pause" class="mobile-btn" aria-label="Pause">❚❚</button>
+        <button type="button" id="btn-mute" class="mobile-btn" aria-label="Mute">♪</button>
+      </div>
+      <div id="dpad" role="group" aria-label="Direction pad">
+        <button type="button" class="dpad-btn" data-dir="U" aria-label="Up">▲</button>
+        <button type="button" class="dpad-btn" data-dir="L" aria-label="Left">◀</button>
+        <button type="button" class="dpad-btn dpad-center" disabled aria-hidden="true"></button>
+        <button type="button" class="dpad-btn" data-dir="R" aria-label="Right">▶</button>
+        <button type="button" class="dpad-btn" data-dir="D" aria-label="Down">▼</button>
+      </div>
+    </div>
   </div>
 
   <script src="game.js"></script>

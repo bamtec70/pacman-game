@@ -14,13 +14,26 @@ start index.html
 
 ## Controls
 
+### Desktop
+
 | Key | Action |
 |-----|--------|
 | **Arrow keys** or **WASD** | Move |
 | **Space** | Start / Pause / Resume |
 | **M** | Mute sound |
-| **Swipe** (touch/mouse drag) | Move |
 | **Click** | Start game |
+
+### Phone / touch screen
+
+| Input | Action |
+|-------|--------|
+| **On-screen D-pad** | Move |
+| **Swipe** on the maze | Move (direction updates as you swipe) |
+| **Tap** maze / overlay | Start or resume |
+| **❚❚ button** | Pause / resume / start |
+| **♪ button** | Mute / unmute |
+
+The D-pad and side buttons appear automatically on phones and touch-first devices.
 
 ## Features
 

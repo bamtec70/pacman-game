@@ -888,7 +888,7 @@
       if (dieT <= 0) {
         if (lives <= 0) {
           state = "over";
-          showOV("GAME OVER", "PRESS SPACE", "gameover");
+          showOV("GAME OVER", isTouchPrimary() ? "TAP TO RESTART" : "PRESS SPACE", "gameover");
           return;
         }
         fullReset(false);
@@ -1185,59 +1185,191 @@
     return null;
   }
 
+  const DIR_BY_ID = { L, R, U, D };
+
+  /** Queue a direction (keyboard, swipe, or on-screen D-pad). */
+  function setDir(d) {
+    if (!d) return;
+    hold = d;
+    if (pac && (state === "play" || state === "ready")) {
+      pac.next = d;
+      if (state === "play" && d.id === OPP[pac.dir.id].id) pac.dir = d;
+    }
+  }
+
+  function clearDir(d) {
+    if (d && hold && d.id === hold.id) hold = null;
+  }
+
+  function isTouchPrimary() {
+    return window.matchMedia("(pointer: coarse)").matches
+      || window.matchMedia("(max-width: 820px)").matches
+      || ("ontouchstart" in window);
+  }
+
+  function resumeHint() {
+    return isTouchPrimary() ? "TAP TO RESUME" : "SPACE TO RESUME";
+  }
+
+  function togglePauseOrStart() {
+    unlockAudio();
+    if (state === "title" || state === "over") beginGame();
+    else if (state === "play") {
+      state = "pause";
+      showOV("PAUSED", resumeHint(), "paused");
+    } else if (state === "pause") {
+      state = "play";
+      hideOV();
+    }
+  }
+
+  function toggleMute() {
+    muted = !muted;
+    const btn = document.getElementById("btn-mute");
+    if (btn) {
+      btn.textContent = muted ? "✕" : "♪";
+      btn.classList.toggle("active", muted);
+      btn.setAttribute("aria-label", muted ? "Unmute" : "Mute");
+    }
+  }
+
   window.addEventListener("keydown", (e) => {
-    if (e.key === "m" || e.key === "M") { muted = !muted; return; }
+    if (e.key === "m" || e.key === "M") { toggleMute(); return; }
 
     if (e.code === "Space" || e.key === " ") {
       e.preventDefault();
-      unlockAudio();
-      if (state === "title" || state === "over") beginGame();
-      else if (state === "play") { state = "pause"; showOV("PAUSED", "SPACE TO RESUME", "paused"); }
-      else if (state === "pause") { state = "play"; hideOV(); }
+      togglePauseOrStart();
       return;
     }
 
     const d = readDir(e);
     if (!d) return;
     e.preventDefault();
-    hold = d;
-    if (pac && (state === "play" || state === "ready")) {
-      pac.next = d;
-      if (state === "play" && d.id === OPP[pac.dir.id].id) pac.dir = d;
-    }
+    setDir(d);
   }, { passive: false });
 
   window.addEventListener("keyup", (e) => {
     const d = readDir(e);
-    if (d && hold && d.id === hold.id) hold = null;
+    clearDir(d);
   });
 
   canvas.tabIndex = 0;
   canvas.style.outline = "none";
 
+  // ── Swipe / tap on the maze (touch + mouse) ───────────────────────────────
+  const SWIPE_MIN = 18;
   let swipe = null;
+
+  function applySwipe(dx, dy, force) {
+    if (!pac || (state !== "play" && state !== "ready")) return false;
+    if (Math.hypot(dx, dy) < SWIPE_MIN) return false;
+    const d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? R : L) : (dy > 0 ? D : U);
+    // Only re-queue when direction changes (avoids spam during long swipe)
+    if (!force && hold && hold.id === d.id && pac.next && pac.next.id === d.id) return true;
+    setDir(d);
+    return true;
+  }
+
   canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
     canvas.focus();
-    swipe = { x: e.clientX, y: e.clientY };
+    canvas.setPointerCapture?.(e.pointerId);
+    swipe = { x: e.clientX, y: e.clientY, moved: false, id: e.pointerId };
     unlockAudio();
     if (state === "title" || state === "over") beginGame();
     else if (state === "pause") { state = "play"; hideOV(); }
-  });
-  canvas.addEventListener("pointerup", (e) => {
-    if (!swipe || !pac) return;
-    const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y;
+  }, { passive: false });
+
+  canvas.addEventListener("pointermove", (e) => {
+    if (!swipe || swipe.id !== e.pointerId) return;
+    e.preventDefault();
+    const dx = e.clientX - swipe.x;
+    const dy = e.clientY - swipe.y;
+    if (applySwipe(dx, dy, false)) {
+      swipe.moved = true;
+      // Reset origin so successive swipes can chain mid-gesture
+      swipe.x = e.clientX;
+      swipe.y = e.clientY;
+    }
+  }, { passive: false });
+
+  function endSwipe(e) {
+    if (!swipe || (e && swipe.id !== e.pointerId)) return;
+    if (e) e.preventDefault();
+    if (!swipe.moved && pac) {
+      const dx = (e ? e.clientX : swipe.x) - swipe.x;
+      const dy = (e ? e.clientY : swipe.y) - swipe.y;
+      applySwipe(dx, dy, true);
+    }
     swipe = null;
-    if (Math.hypot(dx, dy) < 18) return;
-    const d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? R : L) : (dy > 0 ? D : U);
-    pac.next = d;
-    hold = d;
-  });
+  }
+
+  canvas.addEventListener("pointerup", endSwipe, { passive: false });
+  canvas.addEventListener("pointercancel", endSwipe, { passive: false });
+
+  // Block browser scroll / pinch while touching the game area
+  document.getElementById("game-wrapper").addEventListener("touchmove", (e) => {
+    e.preventDefault();
+  }, { passive: false });
 
   overlay.style.pointerEvents = "auto";
   overlay.addEventListener("click", () => {
     unlockAudio();
     if (state === "title" || state === "over") beginGame();
+    else if (state === "pause") { state = "play"; hideOV(); }
   });
+
+  // ── On-screen D-pad + pause / mute ───────────────────────────────────────
+  function bindHoldButton(el, onDown, onUp) {
+    if (!el) return;
+    const down = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (el.classList.contains("active")) return;
+      el.classList.add("active");
+      el.setPointerCapture?.(e.pointerId);
+      unlockAudio();
+      onDown(e);
+    };
+    const up = (e) => {
+      if (!el.classList.contains("active")) return;
+      e.preventDefault?.();
+      e.stopPropagation?.();
+      el.classList.remove("active");
+      onUp(e);
+    };
+    el.addEventListener("pointerdown", down, { passive: false });
+    el.addEventListener("pointerup", up, { passive: false });
+    el.addEventListener("pointercancel", up, { passive: false });
+    el.addEventListener("lostpointercapture", up, { passive: false });
+    // Avoid synthetic mouse click after touch
+    el.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); });
+  }
+
+  document.querySelectorAll(".dpad-btn[data-dir]").forEach((btn) => {
+    const d = DIR_BY_ID[btn.getAttribute("data-dir")];
+    bindHoldButton(
+      btn,
+      () => {
+        setDir(d);
+        if (state === "title" || state === "over") beginGame();
+        else if (state === "pause") { state = "play"; hideOV(); }
+      },
+      () => clearDir(d)
+    );
+  });
+
+  bindHoldButton(
+    document.getElementById("btn-pause"),
+    () => togglePauseOrStart(),
+    () => {}
+  );
+
+  bindHoldButton(
+    document.getElementById("btn-mute"),
+    () => toggleMute(),
+    () => {}
+  );
 
   // ── Boot + self-test ─────────────────────────────────────────────────────
   function selfTest() {
