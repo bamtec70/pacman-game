@@ -182,34 +182,119 @@
   const $hint = document.getElementById("overlay-hint");
   const $ctrl = document.getElementById("overlay-controls");
 
-  // ── Audio ────────────────────────────────────────────────────────────────
-  let audio = null, muted = false, chompN = 0;
+  // ── Audio (arcade-style Namco synthesis via Web Audio) ───────────────────
+  let audio = null, muted = false, chompN = 0, noiseBuf = null;
   function unlockAudio() {
     if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
     if (audio.state === "suspended") audio.resume();
+    if (!noiseBuf && audio) {
+      const n = audio.sampleRate * 0.2 | 0;
+      noiseBuf = audio.createBuffer(1, n, audio.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    }
   }
-  function tone(freq, dur, type = "square", vol = 0.04, when = 0) {
+  function tone(freq, dur, type = "square", vol = 0.04, when = 0, slideTo) {
     if (muted || !audio) return;
     const t = audio.currentTime + when;
     const o = audio.createOscillator();
     const g = audio.createGain();
     o.type = type;
-    o.frequency.value = freq;
-    g.gain.setValueAtTime(vol, t);
+    o.frequency.setValueAtTime(freq, t);
+    if (slideTo != null) o.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g); g.connect(audio.destination);
-    o.start(t); o.stop(t + dur + 0.02);
+    o.start(t); o.stop(t + dur + 0.03);
+  }
+  function noise(dur, vol = 0.03, when = 0, filterFreq = 1200) {
+    if (muted || !audio || !noiseBuf) return;
+    const t = audio.currentTime + when;
+    const src = audio.createBufferSource();
+    src.buffer = noiseBuf;
+    const f = audio.createBiquadFilter();
+    f.type = "bandpass";
+    f.frequency.value = filterFreq;
+    const g = audio.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f); f.connect(g); g.connect(audio.destination);
+    src.start(t); src.stop(t + dur + 0.02);
+  }
+  function seq(notes, type = "square", vol = 0.04) {
+    // notes: [freq, dur, gapAfter]
+    let t = 0;
+    for (const n of notes) {
+      const [f, d, gap = 0] = n;
+      if (f > 0) tone(f, d, type, vol, t);
+      t += d + gap;
+    }
   }
   function sfx(name) {
     unlockAudio();
-    if (name === "chomp") { tone(140 + (chompN++ % 2) * 50, 0.03, "square", 0.025); }
-    else if (name === "power") { tone(220, 0.06); tone(340, 0.06, "square", 0.04, 0.06); tone(460, 0.1, "square", 0.04, 0.12); }
-    else if (name === "eat") { tone(500, 0.05); tone(750, 0.1, "square", 0.04, 0.05); }
-    else if (name === "die") { for (let i = 0; i < 9; i++) tone(440 - i * 40, 0.07, "sawtooth", 0.035, i * 0.06); }
-    else if (name === "fruit") { tone(800, 0.05); tone(1100, 0.08, "square", 0.04, 0.05); }
-    else if (name === "start") { [262, 330, 392, 523].forEach((f, i) => tone(f, 0.1, "square", 0.04, i * 0.1)); }
-    else if (name === "1up") { [523, 659, 784].forEach((f, i) => tone(f, 0.08, "square", 0.04, i * 0.08)); }
-    else if (name === "siren") { tone(frightT > 0 ? 210 : 140, 0.035, "triangle", 0.012); }
+    if (muted || !audio) return;
+
+    if (name === "chomp") {
+      // Classic "waka-waka": two alternating mellow square blips
+      const a = 174.6, b = 207.7; // F3 / G#3-ish
+      const f = (chompN++ % 2 === 0) ? a : b;
+      tone(f, 0.055, "square", 0.028);
+      tone(f * 0.5, 0.04, "triangle", 0.012);
+    } else if (name === "power") {
+      // Energizer: rising pulse trio
+      tone(196, 0.07, "square", 0.04);
+      tone(247, 0.07, "square", 0.04, 0.07);
+      tone(330, 0.12, "square", 0.045, 0.14);
+      tone(196, 0.1, "triangle", 0.02, 0.05);
+    } else if (name === "eat") {
+      // Eating a ghost: quick rising "bwip"
+      tone(400, 0.06, "square", 0.04, 0, 650);
+      tone(650, 0.08, "square", 0.035, 0.05, 980);
+      tone(980, 0.1, "triangle", 0.025, 0.1);
+    } else if (name === "die") {
+      // Classic death: descending steps with vibrato-ish pairs
+      const base = [523, 494, 466, 440, 415, 392, 370, 349, 330, 311, 294, 277, 262, 247, 233, 220];
+      base.forEach((f, i) => {
+        tone(f, 0.055, "square", 0.032, i * 0.055);
+        tone(f * 1.01, 0.04, "triangle", 0.012, i * 0.055 + 0.01);
+      });
+      noise(0.15, 0.02, 0.85, 400);
+    } else if (name === "fruit") {
+      // Bonus fruit ding
+      tone(880, 0.05, "square", 0.035);
+      tone(1175, 0.09, "square", 0.04, 0.05);
+      tone(1568, 0.06, "triangle", 0.02, 0.1);
+    } else if (name === "start") {
+      // Pac-Man intro jingle (approx Namco opening motif)
+      // C#5 G#4 F#4 F4 | F5 C5 G#4 F#4 F4 | …
+      seq([
+        [554, 0.09, 0.01], [415, 0.09, 0.01], [370, 0.09, 0.01], [349, 0.12, 0.06],
+        [698, 0.09, 0.01], [523, 0.09, 0.01], [415, 0.09, 0.01], [370, 0.09, 0.01], [349, 0.14, 0.08],
+        [554, 0.08, 0.01], [415, 0.08, 0.01], [370, 0.08, 0.01], [349, 0.08, 0.01],
+        [370, 0.08, 0.01], [349, 0.08, 0.01], [330, 0.08, 0.01], [311, 0.18, 0],
+      ], "square", 0.038);
+    } else if (name === "1up") {
+      seq([
+        [523, 0.07, 0.01], [659, 0.07, 0.01], [784, 0.07, 0.01],
+        [1047, 0.14, 0],
+      ], "square", 0.04);
+    } else if (name === "siren") {
+      // Maze siren: rises as dots clear; frighten mode is lower warble
+      if (frightT > 0) {
+        const f = 180 + (frightT % 200) * 0.4;
+        tone(f, 0.09, "triangle", 0.016, 0, f * 1.15);
+        tone(f * 0.75, 0.08, "square", 0.008);
+      } else {
+        // Pitch climbs as fewer dots remain (classic tension)
+        const total = 244;
+        const remain = typeof dots === "number" ? dots : total;
+        const t01 = 1 - Math.min(1, Math.max(0, remain / total));
+        const f0 = 120 + t01 * 100;
+        tone(f0, 0.11, "triangle", 0.014, 0, f0 * 1.08);
+        tone(f0 * 1.5, 0.09, "square", 0.006);
+      }
+    }
   }
 
   // ── State ────────────────────────────────────────────────────────────────
