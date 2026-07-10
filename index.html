@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PAC-MAN — 1980 Arcade Classic</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="game-wrapper">
+    <header id="hud">
+      <div class="hud-block">
+        <div class="label">1UP</div>
+        <div id="score">00</div>
+      </div>
+      <div class="hud-block">
+        <div class="label">HIGH SCORE</div>
+        <div id="high-score">00</div>
+      </div>
+      <div class="hud-block">
+        <div class="label">LEVEL</div>
+        <div id="level">1</div>
+      </div>
+    </header>
+
+    <div id="canvas-wrap">
+      <canvas id="game" width="672" height="744"></canvas>
+      <div id="overlay">
+        <div id="overlay-title">PAC-MAN</div>
+        <div id="overlay-sub">INSERT COIN</div>
+        <div id="overlay-hint">PRESS SPACE OR CLICK TO START</div>
+        <div id="overlay-controls">
+          ARROWS / WASD — MOVE<br />
+          SPACE — START / PAUSE<br />
+          M — MUTE
+        </div>
+      </div>
+    </div>
+
+    <footer id="footer">
+      <div id="lives"></div>
+      <div id="fruit-tray"></div>
+    </footer>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
